@@ -1,9 +1,10 @@
 import sys
 from inspect import signature
 
+from PyQt5.QtCore import QDateTime
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, \
     QTableWidget, QTableWidgetItem, QGridLayout, QHeaderView, QMessageBox, QDialog, QButtonGroup, \
-    QRadioButton, QComboBox, QFileDialog, QDialogButtonBox
+    QRadioButton, QComboBox, QFileDialog, QDialogButtonBox, QDateTimeEdit
 from openpyxl.styles import Font, Alignment
 
 
@@ -125,7 +126,9 @@ class OP1Form(QWidget):
         super().__init__()
         self.org_combobox = None
         self.dish_combobox = None
-        self.signatures_data = None  # Атрибут для хранения данных подписей
+        self.signatures_data = None  # Атрибут для хранения данных подписей - чет не работает
+        self.date_time_edit = None
+        self.name_org = None
         self.initUI()
 
     def initUI(self):
@@ -143,8 +146,8 @@ class OP1Form(QWidget):
 
         self.add_searchable_combobox(grid_layout, 'Вид операции:', ['Приготовление', 'Обработка', 'Упаковка'], 0, 0)
 
-        self.add_line_edit(grid_layout, 'Номер:', '0000-000519', 1, 0)
-        self.add_line_edit(grid_layout, 'От:', '23.10.2020 13:29:54', 1, 2)
+        self.name_org = self.add_line_edit(grid_layout, 'Номер:', '0000-000519', 1, 0)
+        self.date_time_edit = self.add_date_time(grid_layout, 'От:', '23.10.2020', 1, 2)
 
         self.add_line_edit(grid_layout, 'Составлено на:', '1,000', 0, 6)
         self.add_line_edit(grid_layout, 'Выход для печати:', '100', 1, 6)
@@ -249,6 +252,23 @@ class OP1Form(QWidget):
                 unit, okei = line.strip().split(': ')
                 self.unit_to_okei[unit] = okei
 
+    def add_date_time(self, layout, label_text, default_date_time, row, column):
+        date_time_edit = QDateTimeEdit()
+        date_time_edit.setDisplayFormat("dd.MM.yyyy")
+        date_time_edit.setDateTime(QDateTime.fromString(default_date_time, "dd.MM.yyyy"))
+
+        layout.addWidget(QLabel(label_text), row, column)
+        layout.addWidget(date_time_edit, row, column + 1)
+
+        return date_time_edit
+
+    def get_date(self):
+        selected_date = self.date_time_edit.dateTime().toString("dd.MM.yyyy")
+        return selected_date
+
+    def get_number_value(self):
+        return self.name_org.text()
+
     def show_signatures_dialog(self):
         if self.signatures_data is None:  # Если данные еще не сохранены
             dialog = SignaturesDialog(self)
@@ -259,9 +279,8 @@ class OP1Form(QWidget):
                                         f"Бухгалтер: {self.signatures_data['accountant']['fio']} ({self.signatures_data['accountant']['position']})\n"
                                         f"Утверждаю: {self.signatures_data['approve']['fio']} ({self.signatures_data['approve']['position']})")
             else:
-                self.signatures_data = {}  # Если диалог закрыт без принятия, сохраняем пустой словарь
+                self.signatures_data = {}
         else:
-            # Если данные уже сохранены, показываем их
             QMessageBox.information(self, "Подписи",
                                     f"Заведующий: {self.signatures_data['head']['fio']} ({self.signatures_data['head']['position']})\n"
                                     f"Бухгалтер: {self.signatures_data['accountant']['fio']} ({self.signatures_data['accountant']['position']})\n"
@@ -273,6 +292,7 @@ class OP1Form(QWidget):
         line_edit = QLineEdit(default_text)
         layout.addWidget(label, row, col)
         layout.addWidget(line_edit, row, col + 1)
+        return line_edit
 
     def add_searchable_combobox(self, layout, label_text, items, row=0, col=0):
         label = QLabel(label_text)
@@ -470,10 +490,10 @@ class OP1Form(QWidget):
         ws['AL13'] = 'Дата составления'
         ws.merge_cells('AL13:AS13')
 
-        ws['AD14'] = ' '
+        ws['AD14'] = self.get_number_value()
         ws.merge_cells('AD14:AK14')
 
-        ws['AL14'] = ' '
+        ws['AL14'] = self.get_date()
         ws.merge_cells('AL14:AS14')
 
         ws['A16'] = ('Порядковый номер калькуляции,'
@@ -569,13 +589,10 @@ class OP1Form(QWidget):
                     row_data.append(item.text() if item else "")
 
             for col_idx, (start_col, end_col) in enumerate(column_ranges):
-                # Определяем первую ячейку в объединенном диапазоне
                 cell = ws[f"{start_col}{start_row + row}"]
 
-                # Записываем значение только в первую ячейку диапазона
                 cell.value = row_data[col_idx]
 
-                # Объединяем ячейки, если это необходимо
                 if start_col != end_col:
                     ws.merge_cells(f"{start_col}{start_row + row}:{end_col}{start_row + row}")
 

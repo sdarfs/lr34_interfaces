@@ -24,7 +24,6 @@ class SignaturesDialog(QDialog):
 
         self.workers = self.load_workers('workers.txt')
 
-
         head_layout = QHBoxLayout()
         head_layout.addWidget(QLabel('Заведующий:'))
         self.head_fio = QComboBox()
@@ -120,7 +119,6 @@ class SignaturesDialog(QDialog):
         }
 
 
-
 class OP1Form(QWidget):
     def __init__(self):
         super().__init__()
@@ -145,7 +143,8 @@ class OP1Form(QWidget):
 
         grid_layout = QGridLayout()
 
-        self.operation_combobox = self.add_searchable_combobox(grid_layout, 'Вид операции:', ['Приготовление', 'Обработка', 'Упаковка'], 0, 0)
+        self.operation_combobox = self.add_searchable_combobox(grid_layout, 'Вид операции:',
+                                                               ['Приготовление', 'Обработка', 'Упаковка'], 0, 0)
 
         self.name_org = self.add_line_edit(grid_layout, 'Номер:', '0000-000519', 1, 0)
         self.date_time_edit = self.add_date_time(grid_layout, 'От:', '23.10.2020', 1, 2)
@@ -233,10 +232,8 @@ class OP1Form(QWidget):
 
         self.setLayout(main_layout)
 
-        # Загрузка данных из файлов
         self.load_data()
 
-        # Подключение сигнала cellChanged
         self.table.cellChanged.connect(self.on_cell_changed)
 
     def load_data(self):
@@ -252,8 +249,6 @@ class OP1Form(QWidget):
             for line in file:
                 unit, okei = line.strip().split(': ')
                 self.unit_to_okei[unit] = okei
-
-
 
     def load_operations_codes(self, filename='operations_code.txt'):
         """Загружает соответствие операций и кодов из файла."""
@@ -414,9 +409,25 @@ class OP1Form(QWidget):
                     cost_item = QTableWidgetItem()
                     self.table.setItem(row, 9, cost_item)
                 cost_item.setText(f"{cost:.2f}")
+
+                # Обновляем общую цену блюда
+                self.update_total_price()
         except ValueError:
             pass
 
+    def update_total_price(self):
+        """Обновляет общую цену блюда как сумму всех ингредиентов"""
+        total = 0.0
+        for row in range(self.table.rowCount()):
+            cost_item = self.table.item(row, 9)  # Колонка "Сумма"
+            if cost_item and cost_item.text():
+                try:
+                    total += float(cost_item.text().replace(',', '.'))
+                except ValueError:
+                    continue
+
+        # Обновляем поле "Цена блюда"
+        self.price_input.setText(f"{total:.2f}".replace('.', ','))
     def save_to_xlsx(self, filename):
         from openpyxl import Workbook
         wb = Workbook()
@@ -464,7 +475,7 @@ class OP1Form(QWidget):
 
         operations_codes = self.load_operations_codes()
         selected_operation = self.operation_combobox.currentText()
-        operation_code = operations_codes.get(selected_operation,'')
+        operation_code = operations_codes.get(selected_operation, '')
 
         ws['BC12'] = operation_code
         ws.merge_cells('BC12:BJ12')
@@ -496,7 +507,6 @@ class OP1Form(QWidget):
                 cell = ws.cell(row=row, column=col)
                 cell.font = font
                 cell.alignment = alignment
-
 
         ws['AD13'] = 'Номер документа'
         ws.merge_cells('AD13:AK13')
@@ -613,19 +623,38 @@ class OP1Form(QWidget):
         signatures_row = start_row + self.table.rowCount() + 4
         alignment = Alignment(horizontal="center", vertical="center")
         signature_font = Font(size=6.5)
+
+        ws[f"AM{signatures_row}"] = "Общая стоимость сырьевого набора, руб. коп:"
+        ws.merge_cells(f"AM{signatures_row}:BC{signatures_row}")
+
+        ws[f"BF{signatures_row}"] = self.price_input.text()
+        ws.merge_cells(f"BD{signatures_row}:BJ{signatures_row}")
+
+        ws[f"AM{signatures_row+1}"] = "Выход в готовом виде: "
+        ws.merge_cells(f"AM{signatures_row+1}:BC{signatures_row+1}")
+
+        ws[f"AM{signatures_row + 2}"] = "Продажная цена для Буфета: "
+        ws.merge_cells(f"AM{signatures_row + 2}:BC{signatures_row + 2}")
+
+        ws[f"AM{signatures_row + 3}"] = "Сумма наценки %: "
+        ws.merge_cells(f"AM{signatures_row + 3}:BC{signatures_row + 3}")
+
+        ws[f"AM{signatures_row + 4}"] = "Процент наценки %: "
+        ws.merge_cells(f"AM{signatures_row + 4}:BC{signatures_row + 4}")
+
         ws[f"A{signatures_row}"] = "Заведующий:"
 
         ws.merge_cells(f"A{signatures_row}:E{signatures_row}")
-        ws[f"A{signatures_row+1}"] = ' '
-        ws.merge_cells(f"A{signatures_row+1}:L{signatures_row+1}")
-        ws[f"M{signatures_row+1}"] = '(подпись)'
+        ws[f"A{signatures_row + 1}"] = ' '
+        ws.merge_cells(f"A{signatures_row + 1}:L{signatures_row + 1}")
+        ws[f"M{signatures_row + 1}"] = '(подпись)'
         ws[f"M{signatures_row + 1}"].font = signature_font
         ws[f"M{signatures_row + 1}"].alignment = alignment
         ws.merge_cells(f"M{signatures_row + 1}:AC{signatures_row + 1}")
 
-        ws[f"A{signatures_row+2}"] = "Бухгалтер:"
+        ws[f"A{signatures_row + 2}"] = "Бухгалтер:"
 
-        ws.merge_cells(f"A{signatures_row+2}:E{signatures_row+2}")
+        ws.merge_cells(f"A{signatures_row + 2}:E{signatures_row + 2}")
         ws[f"A{signatures_row + 3}"] = ' '
         ws.merge_cells(f"A{signatures_row + 3}:L{signatures_row + 3}")
         ws[f"M{signatures_row + 3}"] = '(подпись)'
@@ -634,7 +663,7 @@ class OP1Form(QWidget):
         ws.merge_cells(f"M{signatures_row + 3}:AC{signatures_row + 3}")
 
         ws[f"A{signatures_row + 4}"] = "Утверждено:"
-        ws.merge_cells(f"A{signatures_row+4}:E{signatures_row+4}")
+        ws.merge_cells(f"A{signatures_row + 4}:E{signatures_row + 4}")
 
         ws[f"A{signatures_row + 5}"] = ' '
         ws.merge_cells(f"A{signatures_row + 5}:L{signatures_row + 5}")
@@ -642,7 +671,6 @@ class OP1Form(QWidget):
         ws[f"M{signatures_row + 5}"].font = signature_font
         ws[f"M{signatures_row + 5}"].alignment = alignment
         ws.merge_cells(f"M{signatures_row + 5}:AC{signatures_row + 5}")
-
 
         dialog = SignaturesDialog(self)
         if dialog.exec_() == QDialog.Accepted:
@@ -654,8 +682,6 @@ class OP1Form(QWidget):
             ws.merge_cells(f"F{signatures_row}:AC{signatures_row}")
             ws.merge_cells(f"F{signatures_row + 2}:AC{signatures_row + 2}")
             ws.merge_cells(f"F{signatures_row + 4}:AC{signatures_row + 4}")
-
-
 
         # Устанавливаем шрифт и выравнивание для заголовков
         header_font = Font(bold=True)

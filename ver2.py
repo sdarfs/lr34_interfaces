@@ -587,6 +587,7 @@ class OP1Form(QWidget):
         ws.merge_cells(f"A{signatures_row + 1}:E{signatures_row + 1}")
         ws.merge_cells(f"A{signatures_row + 2}:E{signatures_row + 2}")
 
+
         dialog = SignaturesDialog(self)
         if dialog.exec_() == QDialog.Accepted:
             signatures = dialog.get_signatures()
@@ -596,9 +597,10 @@ class OP1Form(QWidget):
             ws.merge_cells(f"F{signatures_row}:L{signatures_row}")
             ws.merge_cells(f"F{signatures_row + 1}:L{signatures_row + 1}")
             ws.merge_cells(f"F{signatures_row + 2}:L{signatures_row + 2}")
-            ws.merge_cells(f"N{signatures_row}:AC{signatures_row}")
-            ws.merge_cells(f"N{signatures_row + 1}:AC{signatures_row + 1}")
-            ws.merge_cells(f"N{signatures_row + 2}:AC{signatures_row + 2}")
+            ws.merge_cells(f"M{signatures_row}:AC{signatures_row}")
+            ws.merge_cells(f"M{signatures_row + 1}:AC{signatures_row + 1}")
+            ws.merge_cells(f"M{signatures_row + 2}:AC{signatures_row + 2}")
+
 
         # Устанавливаем шрифт и выравнивание для заголовков
         header_font = Font(bold=True)

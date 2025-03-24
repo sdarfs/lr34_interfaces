@@ -129,6 +129,7 @@ class OP1Form(QWidget):
         self.signatures_data = None  # Атрибут для хранения данных подписей - чет не работает
         self.date_time_edit = None
         self.name_org = None
+        self.operation_combobox = None
         self.initUI()
 
     def initUI(self):
@@ -144,7 +145,7 @@ class OP1Form(QWidget):
 
         grid_layout = QGridLayout()
 
-        self.add_searchable_combobox(grid_layout, 'Вид операции:', ['Приготовление', 'Обработка', 'Упаковка'], 0, 0)
+        self.operation_combobox = self.add_searchable_combobox(grid_layout, 'Вид операции:', ['Приготовление', 'Обработка', 'Упаковка'], 0, 0)
 
         self.name_org = self.add_line_edit(grid_layout, 'Номер:', '0000-000519', 1, 0)
         self.date_time_edit = self.add_date_time(grid_layout, 'От:', '23.10.2020', 1, 2)
@@ -251,6 +252,17 @@ class OP1Form(QWidget):
             for line in file:
                 unit, okei = line.strip().split(': ')
                 self.unit_to_okei[unit] = okei
+
+
+
+    def load_operations_codes(self, filename='operations_code.txt'):
+        """Загружает соответствие операций и кодов из файла."""
+        operations_codes = {}
+        with open(filename, 'r', encoding='utf-8') as file:
+            for line in file:
+                operation, code = line.strip().split(':')
+                operations_codes[operation] = code
+        return operations_codes
 
     def add_date_time(self, layout, label_text, default_date_time, row, column):
         date_time_edit = QDateTimeEdit()
@@ -450,7 +462,11 @@ class OP1Form(QWidget):
         ws['BC11'] = ' '
         ws.merge_cells('BC11:BJ11')
 
-        ws['BC12'] = ' '
+        operations_codes = self.load_operations_codes()
+        selected_operation = self.operation_combobox.currentText()
+        operation_code = operations_codes.get(selected_operation,'')
+
+        ws['BC12'] = operation_code
         ws.merge_cells('BC12:BJ12')
 
         ws['A6'] = self.org_combobox.currentText()
@@ -481,17 +497,15 @@ class OP1Form(QWidget):
                 cell.font = font
                 cell.alignment = alignment
 
-        ws['A10'] = ' '
-        ws.merge_cells('A10:BB10')
 
         ws['AD13'] = 'Номер документа'
         ws.merge_cells('AD13:AK13')
 
-        ws['AL13'] = 'Дата составления'
-        ws.merge_cells('AL13:AS13')
-
         ws['AD14'] = self.get_number_value()
         ws.merge_cells('AD14:AK14')
+
+        ws['AL13'] = 'Дата составления'
+        ws.merge_cells('AL13:AS13')
 
         ws['AL14'] = self.get_date()
         ws.merge_cells('AL14:AS14')
@@ -597,31 +611,54 @@ class OP1Form(QWidget):
                     ws.merge_cells(f"{start_col}{start_row + row}:{end_col}{start_row + row}")
 
         signatures_row = start_row + self.table.rowCount() + 4
+        alignment = Alignment(horizontal="center", vertical="center")
+        signature_font = Font(size=6.5)
         ws[f"A{signatures_row}"] = "Заведующий:"
-        ws[f"A{signatures_row + 1}"] = "Бухгалтер:"
-        ws[f"A{signatures_row + 2}"] = "Утверждаю:"
+
         ws.merge_cells(f"A{signatures_row}:E{signatures_row}")
-        ws.merge_cells(f"A{signatures_row + 1}:E{signatures_row + 1}")
-        ws.merge_cells(f"A{signatures_row + 2}:E{signatures_row + 2}")
+        ws[f"A{signatures_row+1}"] = ' '
+        ws.merge_cells(f"A{signatures_row+1}:L{signatures_row+1}")
+        ws[f"M{signatures_row+1}"] = '(подпись)'
+        ws[f"M{signatures_row + 1}"].font = signature_font
+        ws[f"M{signatures_row + 1}"].alignment = alignment
+        ws.merge_cells(f"M{signatures_row + 1}:AC{signatures_row + 1}")
+
+        ws[f"A{signatures_row+2}"] = "Бухгалтер:"
+
+        ws.merge_cells(f"A{signatures_row+2}:E{signatures_row+2}")
+        ws[f"A{signatures_row + 3}"] = ' '
+        ws.merge_cells(f"A{signatures_row + 3}:L{signatures_row + 3}")
+        ws[f"M{signatures_row + 3}"] = '(подпись)'
+        ws[f"M{signatures_row + 3}"].font = signature_font
+        ws[f"M{signatures_row + 3}"].alignment = alignment
+        ws.merge_cells(f"M{signatures_row + 3}:AC{signatures_row + 3}")
+
+        ws[f"A{signatures_row + 4}"] = "Утверждено:"
+        ws.merge_cells(f"A{signatures_row+4}:E{signatures_row+4}")
+
+        ws[f"A{signatures_row + 5}"] = ' '
+        ws.merge_cells(f"A{signatures_row + 5}:L{signatures_row + 5}")
+        ws[f"M{signatures_row + 5}"] = '(подпись)'
+        ws[f"M{signatures_row + 5}"].font = signature_font
+        ws[f"M{signatures_row + 5}"].alignment = alignment
+        ws.merge_cells(f"M{signatures_row + 5}:AC{signatures_row + 5}")
 
 
         dialog = SignaturesDialog(self)
         if dialog.exec_() == QDialog.Accepted:
             signatures = dialog.get_signatures()
             ws[f"F{signatures_row}"] = f"{signatures['head']['fio']}"
-            ws[f"F{signatures_row + 1}"] = f"{signatures['accountant']['fio']}"
-            ws[f"F{signatures_row + 2}"] = f"{signatures['approve']['fio']}"
-            ws.merge_cells(f"F{signatures_row}:L{signatures_row}")
-            ws.merge_cells(f"F{signatures_row + 1}:L{signatures_row + 1}")
-            ws.merge_cells(f"F{signatures_row + 2}:L{signatures_row + 2}")
-            ws.merge_cells(f"M{signatures_row}:AC{signatures_row}")
-            ws.merge_cells(f"M{signatures_row + 1}:AC{signatures_row + 1}")
-            ws.merge_cells(f"M{signatures_row + 2}:AC{signatures_row + 2}")
+            ws[f"F{signatures_row + 2}"] = f"{signatures['accountant']['fio']}"
+            ws[f"F{signatures_row + 4}"] = f"{signatures['approve']['fio']}"
+
+            ws.merge_cells(f"F{signatures_row}:AC{signatures_row}")
+            ws.merge_cells(f"F{signatures_row + 2}:AC{signatures_row + 2}")
+            ws.merge_cells(f"F{signatures_row + 4}:AC{signatures_row + 4}")
+
 
 
         # Устанавливаем шрифт и выравнивание для заголовков
         header_font = Font(bold=True)
-        alignment = Alignment(horizontal="center", vertical="center")
         for cell in ws[1]:
             cell.font = header_font
             cell.alignment = alignment

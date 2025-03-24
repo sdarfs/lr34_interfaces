@@ -1,4 +1,6 @@
 import sys
+from inspect import signature
+
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, \
     QTableWidget, QTableWidgetItem, QGridLayout, QHeaderView, QMessageBox, QDialog, QButtonGroup, \
     QRadioButton, QComboBox, QFileDialog, QDialogButtonBox
@@ -20,6 +22,7 @@ class SignaturesDialog(QDialog):
         input_width = 350  # Ширина полей ввода в форме подписи
 
         self.workers = self.load_workers('workers.txt')
+
 
         head_layout = QHBoxLayout()
         head_layout.addWidget(QLabel('Заведующий:'))
@@ -110,14 +113,19 @@ class SignaturesDialog(QDialog):
         """Возвращает введенные подписи."""
         return {
             'head': {'fio': self.head_fio.currentText(), 'position': self.head_position.currentText()},
-            'accountant': {'fio': self.accountant_fio.currentText(), 'position': self.accountant_position.currentText()},
+            'accountant': {'fio': self.accountant_fio.currentText(),
+                           'position': self.accountant_position.currentText()},
             'approve': {'fio': self.approve_fio.currentText(), 'position': self.approve_position.currentText()}
         }
+
 
 
 class OP1Form(QWidget):
     def __init__(self):
         super().__init__()
+        self.org_combobox = None
+        self.dish_combobox = None
+        self.signatures_data = None  # Атрибут для хранения данных подписей
         self.initUI()
 
     def initUI(self):
@@ -144,8 +152,10 @@ class OP1Form(QWidget):
         grid_layout.addWidget(QLabel('Цена блюда:'), 2, 6)
         grid_layout.addWidget(self.price_input, 2, 7)
 
-        self.add_searchable_combobox(grid_layout, 'Организация:', ['Организация 1', 'Организация 2', 'Организация 3'], 0, 2)
-        self.add_searchable_combobox(grid_layout, 'Номенклатура:', ['Салат мясной', 'Салат овощной', 'Гречка с тушенкой'], 2, 0)
+        self.org_combobox = self.add_searchable_combobox(grid_layout, 'Организация:',
+                                                         ['Организация 1', 'Организация 2', 'Организация 3'], 0, 2)
+        self.dish_combobox = self.add_searchable_combobox(grid_layout, 'Номенклатура:',
+                                                          ['Салат мясной', 'Салат овощной', 'Гречка с тушенкой'], 2, 0)
 
         main_layout.addLayout(grid_layout)
 
@@ -166,7 +176,8 @@ class OP1Form(QWidget):
         self.table = QTableWidget()
         self.table.setColumnCount(10)
         self.table.setHorizontalHeaderLabels(
-            ['№ п/п', 'Наименование', 'Код', 'Единица', 'Код ОКЕИ', 'Цена, руб. коп.', 'Норма брутто', '% Потерь', 'Норма нетто', 'Сумма, руб. коп.'])
+            ['№ п/п', 'Наименование', 'Код', 'Единица', 'Код ОКЕИ', 'Цена, руб. коп.',
+             'Норма брутто', '% Потерь', 'Норма нетто', 'Сумма, руб. коп.'])
 
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.horizontalHeader().setStretchLastSection(True)
@@ -239,13 +250,22 @@ class OP1Form(QWidget):
                 self.unit_to_okei[unit] = okei
 
     def show_signatures_dialog(self):
-        dialog = SignaturesDialog(self)
-        if dialog.exec_() == QDialog.Accepted:
-            signatures = dialog.get_signatures()
+        if self.signatures_data is None:  # Если данные еще не сохранены
+            dialog = SignaturesDialog(self)
+            if dialog.exec_() == QDialog.Accepted:
+                self.signatures_data = dialog.get_signatures()  # Сохраняем данные
+                QMessageBox.information(self, "Подписи",
+                                        f"Заведующий: {self.signatures_data['head']['fio']} ({self.signatures_data['head']['position']})\n"
+                                        f"Бухгалтер: {self.signatures_data['accountant']['fio']} ({self.signatures_data['accountant']['position']})\n"
+                                        f"Утверждаю: {self.signatures_data['approve']['fio']} ({self.signatures_data['approve']['position']})")
+            else:
+                self.signatures_data = {}  # Если диалог закрыт без принятия, сохраняем пустой словарь
+        else:
+            # Если данные уже сохранены, показываем их
             QMessageBox.information(self, "Подписи",
-                                   f"Заведующий: {signatures['head']['fio']} ({signatures['head']['position']})\n"
-                                   f"Бухгалтер: {signatures['accountant']['fio']} ({signatures['accountant']['position']})\n"
-                                   f"Утверждаю: {signatures['approve']['fio']} ({signatures['approve']['position']})")
+                                    f"Заведующий: {self.signatures_data['head']['fio']} ({self.signatures_data['head']['position']})\n"
+                                    f"Бухгалтер: {self.signatures_data['accountant']['fio']} ({self.signatures_data['accountant']['position']})\n"
+                                    f"Утверждаю: {self.signatures_data['approve']['fio']} ({self.signatures_data['approve']['position']})")
 
     def add_line_edit(self, layout, label_text, default_text='', row=0, col=0):
         label = QLabel(label_text)
@@ -263,6 +283,7 @@ class OP1Form(QWidget):
         combo_box.setCurrentIndex(-1)
         layout.addWidget(label, row, col)
         layout.addWidget(combo_box, row, col + 1)
+        return combo_box
 
     def show_save_dialog(self):
         self.save_dialog = SaveDialog(self)
@@ -368,6 +389,7 @@ class OP1Form(QWidget):
         from openpyxl import Workbook
         wb = Workbook()
         ws = wb.active
+
         ws['N14'] = 'Калькуляционная карточка'
 
         ws['AS1'] = 'Унифицированная форма № ОП-1'
@@ -411,17 +433,20 @@ class OP1Form(QWidget):
         ws['BC12'] = ' '
         ws.merge_cells('BC12:BJ12')
 
-        ws['A6'] = ' '
+        ws['A6'] = self.org_combobox.currentText()
         ws.merge_cells('A6:AU6')
+
+        ws['A8'] = ' '
+        ws.merge_cells('A8:AU8')
+
+        ws['A10'] = self.dish_combobox.currentText()
+        ws.merge_cells('A10:AU10')
 
         ws['A7'] = '(организация)'
         ws.merge_cells('A7:AF7')
 
         ws['A9'] = '(структурное подразделение)'
         ws.merge_cells('A9:AF9')
-
-        ws['A8'] = ' '
-        ws.merge_cells('A8:BB8')
 
         ws['A11'] = '(наименование блюда)'
         ws.merge_cells('A11:AF11')
@@ -504,14 +529,14 @@ class OP1Form(QWidget):
 
         # Устанавливаем ширину столбцов для уменьшения расстояния между ними
         column_widths_pt = {
-            'A': 8,'B': 15,'C': 19,'D': 30,'E': 27,'F': 33,'G': 33,
-            'H': 19,'I': 12,'J': 10,'K': 8,'L': 14,'M': 8,'N': 28,'O': 8,
-            'P': 21,'Q': 10,'R': 10,'S': 8,'T': 14,'U': 8,'V': 28,'W': 8,
-            'X': 21,'Y': 10,'Z': 10,'AA': 8,'AB': 14,'AC': 9,'AD': 27,'AE': 8,'AF': 21,
-            'AG': 11,'AH': 10,'AI': 8,'AJ': 14,'AK': 10,'AL': 15,'AM': 16,'AN': 8,
-            'AO': 21,'AP': 11,'AQ': 10,'AR': 8,'AS': 14,'AT': 8,'AU': 9,'AV': 8,
-            'AW': 13,'AX': 9,'AY': 19,'AZ': 12,'BA': 10,'BB': 12,'BC': 14,'BD': 8,
-            'BE': 15,'BF': 15,'BG': 8,'BH': 10,'BI': 10,'BJ': 12,
+            'A': 8, 'B': 15, 'C': 19, 'D': 30, 'E': 27, 'F': 33, 'G': 33,
+            'H': 19, 'I': 12, 'J': 10, 'K': 8, 'L': 14, 'M': 8, 'N': 28, 'O': 8,
+            'P': 21, 'Q': 10, 'R': 10, 'S': 8, 'T': 14, 'U': 8, 'V': 28, 'W': 8,
+            'X': 21, 'Y': 10, 'Z': 10, 'AA': 8, 'AB': 14, 'AC': 9, 'AD': 27, 'AE': 8, 'AF': 21,
+            'AG': 11, 'AH': 10, 'AI': 8, 'AJ': 14, 'AK': 10, 'AL': 15, 'AM': 16, 'AN': 8,
+            'AO': 21, 'AP': 11, 'AQ': 10, 'AR': 8, 'AS': 14, 'AT': 8, 'AU': 9, 'AV': 8,
+            'AW': 13, 'AX': 9, 'AY': 19, 'AZ': 12, 'BA': 10, 'BB': 12, 'BC': 14, 'BD': 8,
+            'BE': 15, 'BF': 15, 'BG': 8, 'BH': 10, 'BI': 10, 'BJ': 12,
 
         }
 
@@ -554,9 +579,30 @@ class OP1Form(QWidget):
                 if start_col != end_col:
                     ws.merge_cells(f"{start_col}{start_row + row}:{end_col}{start_row + row}")
 
+        signatures_row = start_row + self.table.rowCount() + 4
+        ws[f"A{signatures_row}"] = "Заведующий:"
+        ws[f"A{signatures_row + 1}"] = "Бухгалтер:"
+        ws[f"A{signatures_row + 2}"] = "Утверждаю:"
+        ws.merge_cells(f"A{signatures_row}:E{signatures_row}")
+        ws.merge_cells(f"A{signatures_row + 1}:E{signatures_row + 1}")
+        ws.merge_cells(f"A{signatures_row + 2}:E{signatures_row + 2}")
+
+        dialog = SignaturesDialog(self)
+        if dialog.exec_() == QDialog.Accepted:
+            signatures = dialog.get_signatures()
+            ws[f"F{signatures_row}"] = f"{signatures['head']['fio']}"
+            ws[f"F{signatures_row + 1}"] = f"{signatures['accountant']['fio']}"
+            ws[f"F{signatures_row + 2}"] = f"{signatures['approve']['fio']}"
+            ws.merge_cells(f"F{signatures_row}:L{signatures_row}")
+            ws.merge_cells(f"F{signatures_row + 1}:L{signatures_row + 1}")
+            ws.merge_cells(f"F{signatures_row + 2}:L{signatures_row + 2}")
+            ws.merge_cells(f"N{signatures_row}:AC{signatures_row}")
+            ws.merge_cells(f"N{signatures_row + 1}:AC{signatures_row + 1}")
+            ws.merge_cells(f"N{signatures_row + 2}:AC{signatures_row + 2}")
+
+        # Устанавливаем шрифт и выравнивание для заголовков
         header_font = Font(bold=True)
         alignment = Alignment(horizontal="center", vertical="center")
-
         for cell in ws[1]:
             cell.font = header_font
             cell.alignment = alignment
@@ -602,6 +648,7 @@ class SaveDialog(QDialog):
                 QMessageBox.information(self, "Успех", "Файл успешно сохранен в формате XLSX.")
         self.close()
 
+
 class PrintDialog(QDialog):
     def __init__(self, data, parent=None):
         super().__init__(parent)
@@ -612,7 +659,9 @@ class PrintDialog(QDialog):
 
         self.table = QTableWidget()
         self.table.setColumnCount(10)
-        self.table.setHorizontalHeaderLabels(['№ п/п', 'Наименование', 'Код', 'Единица', 'Код ОКЕИ', 'Цена, руб. коп.', 'Норма брутто', '% Потерь', 'Норма нетто', 'Сумма, руб. коп.'])
+        self.table.setHorizontalHeaderLabels(
+            ['№ п/п', 'Наименование', 'Код', 'Единица', 'Код ОКЕИ', 'Цена, руб. коп.', 'Норма брутто', '% Потерь',
+             'Норма нетто', 'Сумма, руб. коп.'])
 
         self.table.setRowCount(len(data))
         for i, row in enumerate(data):
@@ -629,6 +678,7 @@ class PrintDialog(QDialog):
         layout.addWidget(close_button)
 
         self.setLayout(layout)
+
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
